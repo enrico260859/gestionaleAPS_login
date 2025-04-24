@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrazione / Accedi</title>
+    <link rel="stylesheet" href="style_login.css">
+    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <header>
+    <div class="title">
+        <h1>GESTIONALE PER APS</h1>
+        <H2>Accedi/Registrati per poter utilizzare gli strumenti del Gestionale</H2>
+    </header>
+    <div class="login"> 
+        <form id="registrationForm" method="post">
+            <h2>Registrazione / Accedi</h2>
+            <div class="input">
+                <input type="email" name="email" id="email" required>
+                <label>Email</label>
+                <span></span>
+            </div>
+            <div class="input">
+                <input type="password" name="password" id="password" required>
+                <label>Password</label>
+                <span></span>
+            </div>
+            <div class="button-container">
+                <input type="submit" value="Registrati">
+                <input type="submit" value="Accedi">
+            </div>
+            <br>
+            <a href="#" id="forgotPasswordLink" class="forgot-password">Password Dimenticata</a>
+        </form>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyC4XXGXXYsM0QHkbgiEPBAWdzh-iuFmOFs",
+            authDomain: "login-bea17.firebaseapp.com",
+            projectId: "login-bea17",
+            storageBucket: "login-bea17.appspot.com",
+            messagingSenderId: "429822202272",
+            appId: "1:429822202272:web:1e319cc3a8bbccac2d54c5",
+            measurementId: "G-C04Y90CSMG"
+        };
+
+        // Inizializzazione Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const registrationForm = document.getElementById('registrationForm');
+        const messageDiv = document.getElementById('message');
+        const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+
+        registrationForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const email = registrationForm.email.value;
+            const password = registrationForm.password.value;
+            const submitButtonValue = event.submitter.value; // Ottieni il valore del pulsante cliccato
+
+            if (submitButtonValue === "Registrati") {
+                console.log("Tentativo di registrazione con:", email);
+                try {
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    console.log("Registrazione avvenuta:", userCredential);
+                    const user = userCredential.user;
+                    messageDiv.textContent = `Registrazione avvenuta con successo! UID: ${user.uid}`;
+                    // In produzione, non salvare la password in chiaro!
+                    await db.collection('users').doc(user.uid).set({ email: email });
+                    window.location.href = "home.html";
+                } catch (error) {
+                    console.error("Errore di registrazione:", error);
+                    messageDiv.textContent = `Errore di registrazione: ${error.message} (Potrebbe essere già registrata).`;
+                }
+            } else if (submitButtonValue === "Accedi") {
+                console.log("Tentativo di accesso con:", email);
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                    console.log("Accesso avvenuto");
+                    window.location.href = "home.html";
+                } catch (error) {
+                    console.error("Errore di accesso:", error);
+                    messageDiv.textContent = `Errore di accesso: ${error.message}`;
+                }
+            }
+        });
+
+        forgotPasswordLink.addEventListener('click', async (event) => {
+            event.preventDefault();
+            const email = prompt("Inserisci la tua email per reimpostare la password:");
+            if (email) {
+                try {
+                    await auth.sendPasswordResetEmail(email);
+                    messageDiv.textContent = `Un'email per reimpostare la password è stata inviata a ${email}. Controlla la tua casella di posta (e lo spam).`;
+                } catch (error) {
+                    console.error("Errore nell'invio dell'email di reset password:", error);
+                    messageDiv.textContent = `Errore nell'invio dell'email di reset password: ${error.message}`;
+                }
+            } else {
+                messageDiv.textContent = "L'email non è stata fornita.";
+            }
+        });
+    </script>
+</body>
+</html>
