@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bilancio</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="style_01.css">
+    <link rel="stylesheet" href="style_progetto.css">
     <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore-compat.js"></script>
@@ -13,7 +12,7 @@
 <body>
     <div class="sidebar">
         <h1>Menù</h1>
-        <a href="home.html">Home</a>
+        <a href="index.html">Home</a>
         <a href="volontari.html">Elenco Volontari</a>
         <a href="soci.html">Elenco Soci</a>
         <a href="bilancio_v01.html">Bilancio</a>
@@ -34,7 +33,9 @@
             <div class="modal-content">
                 <h2>Inserisci Dati</h2>
                 <input type="date" class="modal-content input" id="data" placeholder="Data">
-                <input type="text" class="modal-content input" id="descrizione" placeholder="Descrizione">
+                <label for="descrizione">Descrizione:</label>
+                <select id="descrizione" class="modal-content input">
+                </select>
                 <select id="tipo">
                     <option value="entrata">Entrata</option>
                     <option value="uscita">Uscita</option>
@@ -83,7 +84,7 @@
         <span>Uscite Totali: <span id="totaleUscite">0</span> €</span>
         <span>Saldo: <span id="saldo">0</span> €</span>
     </div>
-<script src="bilancio_v01.js"></script>
+<script src="bilancio_v03.js"></script>
 
 </body>
 </html>

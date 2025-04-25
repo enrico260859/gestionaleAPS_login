@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Elenco Soci</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="style_01.css">
+    <link rel="stylesheet" href="style_progetto.css">
     <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore-compat.js"></script>
@@ -13,7 +12,7 @@
     <body>
     <div class="sidebar">
         <h1>Menù</h1>
-        <a href="home.html">Home</a>
+        <a href="index.html">Home</a>
         <a href="volontari.html">Elenco Volontari</a>
         <a href="soci.html">Elenco Soci</a>
         <a href="bilancio_v01.html">Bilancio</a>
@@ -51,7 +50,6 @@
         </div>
             <button id="apriModalButton" onclick="aggiungiSoci()">Aggiungi Socio</button>
             <button onclick="esportaInExcel()">Esporta in Excel</button>
-
           <table id="elencoSoci">
             <thead>
               <tr>
@@ -76,6 +74,6 @@
             }
           </style>
         </div>
-        <script src="elenco-soci.js"></script>
+        <script src="soci.js"></script>
         </body>
 </html>

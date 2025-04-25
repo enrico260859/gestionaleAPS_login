@@ -165,6 +165,7 @@ const auth = firebase.auth();
         window.onload = () => {
             loadData();
         };
+        
         function disconnettiUtente() {
             firebase.auth().signOut().then(() => {
                 console.log('Utente disconnesso da Firebase.');

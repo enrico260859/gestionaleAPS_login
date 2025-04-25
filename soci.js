@@ -39,7 +39,8 @@ function loadData() {
 function loadSoci() {
     const transaction = db.transaction(['soci'], 'readonly');
     const objectStore = transaction.objectStore('soci');
-    objectStore.getAll().onsuccess = function(event) {
+    const getAllRequest = objectStore.getAll();
+    getAllRequest.onsuccess = function(event) {
         soci = event.target.result || [];
         aggiornaElencoSoci();
     };
@@ -47,23 +48,32 @@ function loadSoci() {
 function loadPagina() {
     const transaction = db.transaction(['pagina'], 'readonly');
     const objectStore = transaction.objectStore('pagina');
-    objectStore.get(1).onsuccess = function(event) {
+    const getRequest = objectStore.get(1);
+    getRequest.onsuccess = function(event) {
         const pagina = event.target.result;
-        if (pagina) {
+        if (pagina && pagina.headerImage) {
             document.getElementById('headerImage').src = pagina.headerImage;
         }
+    };
+
+    getRequest.onerror = function(event) {
+        console.error('Errore durante il caricamento della pagina:', event.target.errorCode);
     };
 }
 const modal = document.getElementById('modal');
 const apriModalButton = document.getElementById('apriModalButton');
 const chiudiModalButton = document.getElementById('chiudiModalButton');
 const aggiungiSocioButton = document.getElementById('aggiungiSocioButton');
-apriModalButton.onclick = function() {
-    modal.style.display = 'block';
-};
-chiudiModalButton.onclick = function() {
-    modal.style.display = 'none';
-};
+if (apriModalButton) {
+    apriModalButton.onclick = function() {
+        modal.style.display = 'block';
+    };
+}
+if (chiudiModalButton) {
+    chiudiModalButton.onclick = function() {
+        modal.style.display = 'none';
+    };
+}
 aggiungiSocioButton.onclick = function() {
     const data = document.getElementById('data').value;
     const tessera = document.getElementById('tessera').value;
@@ -127,15 +137,28 @@ function eliminaSoci(index) {
         }
     };
 }
+// Funzione per visualizzare l'immagine caricata e salvarla in IndexedDB
 function previewImage() {
     const fileInput = document.getElementById('fileInput');
     const headerImage = document.getElementById('headerImage');
+
     const file = fileInput.files[0];
     if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            headerImage.src = e.target.result;
-            savePagina();
+            if (headerImage) headerImage.src = e.target.result;
+
+            // Salva l'URL dell'immagine in IndexedDB
+            const transaction = db.transaction(['pagina'], 'readwrite');
+            const objectStore = transaction.objectStore('pagina');
+            const putRequest = objectStore.put({ id: 1, headerImage: e.target.result }); // Usa 'put' per aggiornare o aggiungere
+
+            putRequest.onsuccess = function() {
+                console.log('Immagine dell\'header salvata in IndexedDB.');
+            };
+            putRequest.onerror = function(event) {
+                console.error('Errore durante il salvataggio dell\'immagine dell\'header:', event.target.errorCode);
+            };
         }
         reader.readAsDataURL(file);
     }

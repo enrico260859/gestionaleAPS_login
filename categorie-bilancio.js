@@ -1,279 +1,212 @@
-let categorie = JSON.parse(localStorage.getItem('categorie')) || [];
-        let transazioni = JSON.parse(localStorage.getItem('transazioni')) || []; // Initialize transazioni
+const firebaseConfig = {
+  apiKey: "AIzaSyC4XXGXXYsM0QHkbgiEPBAWdzh-iuFmOFs",
+  authDomain: "login-bea17.firebaseapp.com",
+  projectId: "login-bea17",
+  storageBucket: "login-bea17.appspot.com",
+  messagingSenderId: "429822202272",
+  appId: "1:429822202272:web:1e319cc3a8bbccac2d54c5",
+  measurementId: "G-C04Y90CSMG"
+};
 
-        // Funzione per confrontare due elementi (per l'ordinamento alfabetico)
-        function compareByName(a, b) {
-            const nameA = a.nome.toUpperCase();
-            const nameB = b.nome.toUpperCase();
-            if (nameA < nameB) {
-                return -1;
-            }
-            if (nameA > nameB) {
-                return 1;
-            }
-            return 0;
-        }
+// Inizializzazione Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 
-        // Funzione per aggiornare la visualizzazione delle categorie e sottocategorie come albero
-        function aggiornaCatalogoCategorie() {
-            const categorieTreeDiv = document.getElementById('categorie-tree');
-            categorieTreeDiv.innerHTML = ''; // Pulisce l'elenco esistente
+let db;
+const request = indexedDB.open("CategorieBilancioDB", 1);
+request.onupgradeneeded = function (event) {
+  db = event.target.result;
+  if (!db.objectStoreNames.contains("categorie")) {
+    db.createObjectStore("categorie", { keyPath: "id", autoIncrement: true });
+  }
+};
+request.onsuccess = function (event) {
+  db = event.target.result;
+  caricaCategorie();
+  aggiornaSelectDescrizione();
+};
+request.onerror = function (event) {
+  console.error("Errore IndexedDB:", event.target.errorCode);
+};
+function aggiungiCategoria() {
+  const nome = prompt("Inserisci il nome della nuova voce:");
+  if (!nome) return;
 
-            // Ordina le categorie principali PRIMA di visualizzarle
-            const sortedCategorie = [...categorie].sort(compareByName);
+  const tipo = prompt("Tipo voce? (gruppo / sottogruppo / sub-sottogruppo):");
+  if (!["gruppo", "sottogruppo", "sub-sottogruppo"].includes(tipo)) {
+    alert("Tipo non valido");
+    return;
+  }
 
-            const categorieList = document.createElement('ul');
-            categorieList.className = 'categoria-tree';
+  // Mostra le categorie esistenti con gli ID
+  let categorieString = "Categorie esistenti:\n";
+  const tx = db.transaction("categorie", "readonly");
+  const store = tx.objectStore("categorie");
+  const request = store.openCursor();
 
-            sortedCategorie.forEach((categoria, index) => {
-                const categoriaItem = document.createElement('li');
-                categoriaItem.className = 'categoria-item';
+  request.onsuccess = function(event) {
+    const cursor = event.target.result;
+    if (cursor) {
+      categorieString += `ID: ${cursor.key}, Nome: ${cursor.value.nome}\n`;
+      cursor.continue();
+    } else {
+      // Mostra le categorie e poi richiedi l'ID del padre
+      const padre = prompt(categorieString + "\nInserisci l'ID voce padre (lascia vuoto se è un gruppo principale):");
 
-                const categoriaHeader = document.createElement('div');
-                categoriaHeader.className = 'categoria-header';
+      const nuovaVoce = {
+        nome: nome.trim(),
+        tipo: tipo.trim(),
+        padre: padre.trim() || null
+      };
 
-                const categoriaName = document.createElement('strong');
-                categoriaName.textContent = categoria.nome;
-                categoriaHeader.appendChild(categoriaName);
+      const tx = db.transaction("categorie", "readwrite");
+      const store = tx.objectStore("categorie");
+      store.add(nuovaVoce);
 
-                const categoriaActions = document.createElement('div');
-                categoriaActions.className = 'categoria-actions';
+      tx.oncomplete = () => {
+        caricaCategorie();
+        aggiornaSelectDescrizione();
+      };
+    }
+  };
 
-                const modificaButton = document.createElement('button');
-                modificaButton.innerHTML = '<i class="fas fa-pen"></i>';
-                modificaButton.onclick = () => modificaCategoria(categorie.indexOf(categoria)); // Trova l'indice originale
-                categoriaActions.appendChild(modificaButton);
+  request.onerror = function(event) {
+    console.error("Errore IndexedDB:", event.target.error);
+  };
+}
+function caricaCategorie() {
+  const tx = db.transaction("categorie", "readonly");
+  const store = tx.objectStore("categorie");
+  const richiesta = store.getAll();
 
-                const eliminaButton = document.createElement('button');
-                eliminaButton.innerHTML = '<i class="fas fa-trash"></i>';
-                eliminaButton.onclick = () => eliminaCategoria(categorie.indexOf(categoria)); // Trova l'indice originale
-                categoriaActions.appendChild(eliminaButton);
+  richiesta.onsuccess = function () {
+    const categorie = richiesta.result;
+    costruisciAlbero(categorie);
+  };
+}
+function costruisciAlbero(categorie) {
+  const tree = document.getElementById("categorie-tree");
+  tree.innerHTML = "";
 
-                categoriaHeader.appendChild(categoriaActions);
-                categoriaItem.appendChild(categoriaHeader);
+  const mappa = {};
+  categorie.forEach(v => v.figli = []);
+  categorie.forEach(v => mappa[v.id] = v);
+  categorie.forEach(v => {
+    if (v.padre && mappa[v.padre]) {
+      mappa[v.padre].figli.push(v);
+    }
+  });
 
-                const sottocategorieList = document.createElement('ul');
-                sottocategorieList.className = 'sottocategorie-list';
+  const radici = categorie.filter(v => !v.padre);
+  radici.forEach(r => tree.appendChild(creaNodo(r)));
+}
 
-                // Ordina le sottocategorie PRIMA di visualizzarle
-                const sortedSottocategorie = [...categoria.sottocategorie].sort(compareByName);
+function creaNodo(voce) {
+  const div = document.createElement("div");
+  div.classList.add("categoria-nodo");
+  div.innerHTML = `
+    <strong>${voce.nome}</strong> (${voce.tipo})
+    <i class="fas fa-edit" title="Modifica" onclick="modificaCategoria(${voce.id})"></i>
+    <i class="fas fa-trash" title="Elimina" onclick="eliminaCategoria(${voce.id})"></i>
+  `;
 
-                sortedSottocategorie.forEach((sottocategoria, subIndex) => {
-                    const sottocategoriaItem = document.createElement('li');
-                    sottocategoriaItem.className = 'sottocategoria-item';
+  if (voce.figli.length) {
+    const ul = document.createElement("ul");
+    voce.figli.forEach(figlio => {
+      const li = document.createElement("li");
+      li.appendChild(creaNodo(figlio));
+      ul.appendChild(li);
+    });
+    div.appendChild(ul);
+  }
 
-                    const sottocategoriaHeader = document.createElement('div');
-                    sottocategoriaHeader.style.display = 'flex';
-                    sottocategoriaHeader.style.alignItems = 'center';
+  return div;
+}
 
-                    const sottocategoriaName = document.createElement('strong');
-                    sottocategoriaName.textContent = sottocategoria.nome;
-                    sottocategoriaHeader.appendChild(sottocategoriaName);
+function modificaCategoria(id) {
+  const tx = db.transaction("categorie", "readwrite");
+  const store = tx.objectStore("categorie");
+  const richiesta = store.get(id);
 
-                    const sottocategoriaActions = document.createElement('div');
-                    sottocategoriaActions.className = 'categoria-actions';
+  richiesta.onsuccess = function () {
+    const voce = richiesta.result;
+    const nuovoNome = prompt("Modifica nome voce:", voce.nome);
+    if (!nuovoNome) return;
 
-                    const modificaSottoButton = document.createElement('button');
-                    modificaSottoButton.innerHTML = '<i class="fas fa-pen"></i>';
-                    modificaSottoButton.onclick = () => modificaSottocategoria(categorie.indexOf(categoria), categoria.sottocategorie.indexOf(sottocategoria)); // Trova l'indice originale
-                    sottocategoriaActions.appendChild(modificaSottoButton);
+    voce.nome = nuovoNome.trim();
+    store.put(voce);
 
-                    const eliminaSottoButton = document.createElement('button');
-                    eliminaSottoButton.innerHTML = '<i class="fas fa-trash"></i>';
-                    eliminaSottoButton.onclick = () => eliminaSottocategoria(categorie.indexOf(categoria), categoria.sottocategorie.indexOf(sottocategoria)); // Trova l'indice originale
-                    sottocategoriaActions.appendChild(eliminaSottoButton);
+    tx.oncomplete = () => {
+      caricaCategorie();
+      aggiornaSelectDescrizione();
+    };
+  };
+}
 
-                    sottocategoriaHeader.appendChild(sottocategoriaActions);
-                    sottocategoriaItem.appendChild(sottocategoriaHeader);
+function eliminaCategoria(id) {
+  const tx = db.transaction("categorie", "readwrite");
+  const store = tx.objectStore("categorie");
 
-                    const sottosottocategorieList = document.createElement('ul');
-                    sottosottocategorieList.className = 'sottosottocategorie-list';
+  store.getAll().onsuccess = function (event) {
+    const tutte = event.target.result;
+    const daEliminare = raccogliFigli(tutte, id);
+    daEliminare.push(id);
 
-                    // Ordina le sottosottocategorie PRIMA di visualizzarle
-                    const sortedSottosottocategorie = [...sottocategoria.sottosottocategorie].sort(); // Ordina alfabeticamente le stringhe
+    daEliminare.forEach(voceId => store.delete(voceId));
+    tx.oncomplete = () => {
+      caricaCategorie();
+      aggiornaSelectDescrizione();
+    };
+  };
+}
 
-                    sortedSottosottocategorie.forEach((sottosottocategoria, sscIndex) => {
-                        const sottosottocategoriaItem = document.createElement('li');
-                        sottosottocategoriaItem.className = 'sottosottocategoria-item';
-                        sottosottocategoriaItem.textContent = sottosottocategoria;
+function raccogliFigli(categorie, idPadre) {
+  let figliDiretti = categorie.filter(v => v.padre == idPadre).map(v => v.id);
+  let tuttiFigli = [...figliDiretti];
+  figliDiretti.forEach(fid => {
+    tuttiFigli = tuttiFigli.concat(raccogliFigli(categorie, fid));
+  });
+  return tuttiFigli;
+}
 
-                        const sscActions = document.createElement('div');
-                        sscActions.style.display = 'inline';
-                        const modificaSSCButton = document.createElement('button');
-                        modificaSSCButton.innerHTML = '<i class="fas fa-pen"></i>';
-                        modificaSSCButton.onclick = () => modificaSottosottocategoria(categorie.indexOf(categoria), categoria.sottocategorie.indexOf(sottocategoria), sottocategoria.sottosottocategorie.indexOf(sottosottocategoria)); // Trova l'indice originale
-                        sscActions.appendChild(modificaSSCButton);
+function aggiornaSelectDescrizione() {
+  const select = document.getElementById('descrizione');
+  if (!select) return;
 
-                        const eliminaSSCButton = document.createElement('button');
-                        eliminaSSCButton.innerHTML = '<i class="fas fa-trash"></i>';
-                        eliminaSSCButton.onclick = () => eliminaSottosottocategoria(categorie.indexOf(categoria), categoria.sottocategorie.indexOf(sottocategoria), sottocategoria.sottosottocategorie.indexOf(sottosottocategoria)); // Trova l'indice originale
-                        sscActions.appendChild(eliminaSSCButton);
+  select.innerHTML = '';
 
-                        sottosottocategoriaItem.appendChild(document.createTextNode(" ")); // Add space
-                        sottosottocategoriaItem.appendChild(sscActions);
+  const tx = db.transaction("categorie", "readonly");
+  const store = tx.objectStore("categorie");
+  const richiesta = store.getAll();
 
-                        sottosottocategorieList.appendChild(sottosottocategoriaItem);
-                    });
-                    sottocategoriaItem.appendChild(sottosottocategorieList);
+  richiesta.onsuccess = function () {
+    const categorie = richiesta.result;
 
-                    const aggiungiSottoSottoButton = document.createElement('button');
-                    aggiungiSottoSottoButton.textContent = 'Aggiungi Sottosottocategoria';
-                    aggiungiSottoSottoButton.onclick = () => aggiungiSottosottocategoria(categorie.indexOf(categoria), categoria.sottocategorie.indexOf(sottocategoria)); // Trova l'indice originale
-                    sottocategoriaItem.appendChild(aggiungiSottoSottoButton);
+    const mappa = {};
+    categorie.forEach(v => v.figli = []);
+    categorie.forEach(v => mappa[v.id] = v);
+    categorie.forEach(v => {
+      if (v.padre && mappa[v.padre]) {
+        mappa[v.padre].figli.push(v);
+      }
+    });
 
-                    sottocategorieList.appendChild(sottocategoriaItem);
-                });
+    const radici = categorie.filter(v => !v.padre);
+    radici.forEach(r => aggiungiOpzione(select, r, 0));
+  };
+}
 
-                const aggiungiSottoButton = document.createElement('button');
-                aggiungiSottoButton.textContent = 'Aggiungi Sottocategoria';
-                aggiungiSottoButton.onclick = () => aggiungiSottocategoria(categorie.indexOf(categoria)); // Trova l'indice originale
-                categoriaItem.appendChild(aggiungiSottoButton);
-                categoriaItem.appendChild(sottocategorieList);
+function aggiungiOpzione(select, voce, livello) {
+  const option = document.createElement('option');
+  option.value = voce.nome;
+  option.textContent = `${'—'.repeat(livello)} ${voce.nome} (${voce.tipo})`;
+  select.appendChild(option);
 
-                categorieList.appendChild(categoriaItem);
-            });
+  if (voce.figli && voce.figli.length > 0) {
+    voce.figli.forEach(figlio => aggiungiOpzione(select, figlio, livello + 1));
+  }
+}
 
-            categorieTreeDiv.appendChild(categorieList);
-
-            // Aggiorna anche l'elenco a discesa "Descrizione" in ordine crescente
-            const descrizioneSelect = document.getElementById('descrizione');
-            descrizioneSelect.innerHTML = '';
-            const defaultOption = document.createElement('option');
-            defaultOption.value = '';
-            defaultOption.textContent = 'Seleziona una Categoria/Sottocategoria';
-            descrizioneSelect.appendChild(defaultOption);
-
-            sortedCategorie.forEach(categoria => {
-                const optionCategoria = document.createElement('option');
-                optionCategoria.value = categoria.nome;
-                optionCategoria.textContent = categoria.nome;
-                descrizioneSelect.appendChild(optionCategoria);
-
-                const sortedSottocategorie = [...categoria.sottocategorie].sort(compareByName);
-                sortedSottocategorie.forEach(sottocategoria => {
-                    const optionSottocategoria = document.createElement('option');
-                    optionSottocategoria.value = sottocategoria.nome;
-                    optionSottocategoria.textContent = `-- ${sottocategoria.nome}`;
-                    descrizioneSelect.appendChild(optionSottocategoria);
-
-                    const sortedSottosottocategorie = [...sottocategoria.sottosottocategorie].sort();
-                    sortedSottosottocategorie.forEach(ssc => {
-                        const optionSSC = document.createElement('option');
-                        optionSSC.value = ssc;
-                        optionSSC.textContent = `---- ${ssc}`;
-                        descrizioneSelect.appendChild(optionSSC);
-                    });
-                });
-            });
-        }
-
-        aggiornaCatalogoCategorie();
-
-        // Funzione per aggiungere una categoria
-        function aggiungiCategoria() {
-            const nomeCategoria = prompt('Nome della Categoria:');
-            if (nomeCategoria) {
-                const categoria = { nome: nomeCategoria, sottocategorie: [] };
-                categorie.push(categoria);
-                // Ordina l'array delle categorie dopo l'aggiunta
-                categorie.sort(compareByName);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per aggiungere una sottocategoria
-        function aggiungiSottocategoria(categoriaIndex) {
-            const nomeSottocategoria = prompt('Nome della Sottocategoria:');
-            if (nomeSottocategoria) {
-                categorie[categoriaIndex].sottocategorie.push({ nome: nomeSottocategoria, sottosottocategorie: [] });
-                // Ordina l'array delle sottocategorie dopo l'aggiunta
-                categorie[categoriaIndex].sottocategorie.sort(compareByName);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per aggiungere una sottosottocategoria
-        function aggiungiSottosottocategoria(categoriaIndex, sottocategoriaIndex) {
-            const nomeSottosottocategoria = prompt('Nome della Sottosottocategoria:');
-            if (nomeSottosottocategoria) {
-                categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie.push(nomeSottosottocategoria);
-                // Ordina l'array delle sottosottocategorie dopo l'aggiunta
-                categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie.sort();
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per eliminare una categoria
-        function eliminaCategoria(index) {
-            if (confirm('Sei sicuro di voler eliminare questa categoria e tutte le sue sottocategorie?')) {
-                categorie.splice(index, 1);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per eliminare una sottocategoria
-        function eliminaSottocategoria(categoriaIndex, sottocategoriaIndex) {
-            if (confirm('Sei sicuro di voler eliminare questa sottocategoria e tutte le sue sottosottocategorie?')) {
-                categorie[categoriaIndex].sottocategorie.splice(sottocategoriaIndex, 1);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per eliminare una sottosottocategoria
-        function eliminaSottosottocategoria(categoriaIndex, sottocategoriaIndex, sscIndex) {
-            if (confirm('Sei sicuro di voler eliminare questa sottosottocategoria?')) {
-                categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie.splice(sscIndex, 1);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per modificare una categoria
-        function modificaCategoria(index) {
-            const nuovoNome = prompt('Nuovo nome della categoria:', categorie[index].nome);
-            if (nuovoNome) {
-                categorie[index].nome = nuovoNome;
-                // Ordina l'array delle categorie dopo la modifica
-                categorie.sort(compareByName);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per modificare una sottocategoria
-        function modificaSottocategoria(categoriaIndex, sottocategoriaIndex) {
-            const nuovoNome = prompt('Nuovo nome della sottocategoria:', categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].nome);
-            if (nuovoNome) {
-                categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].nome = nuovoNome;
-                // Ordina l'array delle sottocategorie dopo la modifica
-                categorie[categoriaIndex].sottocategorie.sort(compareByName);
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per modificare una sottosottocategoria
-        function modificaSottosottocategoria(categoriaIndex, sottocategoriaIndex, sscIndex) {
-            const nuovoNome = prompt('Nuovo nome della sottosottocategoria:', categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie[sscIndex]);
-            if (nuovoNome) {
-                categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie[sscIndex] = nuovoNome;
-                // Ordina l'array delle sottosottocategorie dopo la modifica
-                categorie[categoriaIndex].sottocategorie[sottocategoriaIndex].sottosottocategorie.sort();
-                aggiornaCatalogoCategorie();
-                salvaDati();
-            }
-        }
-
-        // Funzione per salvare i dati in localStorage
-        function salvaDati() {
-            localStorage.setItem('transazioni', JSON.stringify(transazioni));
-            localStorage.setItem('categorie', JSON.stringify(categorie));
-        }
 
         // Funzione di esempio per la preview dell'immagine (potrebbe necessitare implementazione CSS)
         function previewImage() {
@@ -288,3 +221,16 @@ let categorie = JSON.parse(localStorage.getItem('categorie')) || [];
                 reader.read
             }
         } 
+        function disconnettiUtente() {
+          firebase.auth().signOut().then(() => {
+              console.log('Utente disconnesso da Firebase.');
+              window.location.href = 'index.html';
+          }).catch((error) => {
+              console.error('Errore durante la disconnessione da Firebase:', error);
+          });
+      }
+
+      
+      if (disconnettiButton) {
+          disconnettiButton.addEventListener('click', disconnettiUtente);
+      }
